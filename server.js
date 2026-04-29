@@ -17,8 +17,8 @@ app.post('/api/create-payment-intent', async (req, res) => {
 
     // Create a PaymentIntent with the order amount and currency
     const paymentIntent = await stripeInstance.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
-      currency: 'usd',
+      amount: Math.round(amount), // RWF is a zero-decimal currency
+      currency: 'rwf',
       automatic_payment_methods: {
         enabled: true,
       },
