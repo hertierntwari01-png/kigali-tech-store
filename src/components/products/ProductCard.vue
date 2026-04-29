@@ -15,10 +15,7 @@ const cartStore = useCartStore()
 const wishlistStore = useWishlistStore()
 
 const formatPrice = (price) => {
-  return new Intl.NumberFormat('en-RW', {
-    style: 'currency',
-    currency: 'USD', // Keep USD for FakeStoreAPI, but could be RWF
-  }).format(price)
+  return new Intl.NumberFormat('en-RW').format(price) + ' Rwf'
 }
 </script>
 

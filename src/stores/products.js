@@ -41,7 +41,10 @@ export const useProductStore = defineStore('products', {
       this.loading = true
       try {
         const response = await axios.get('https://fakestoreapi.com/products')
-        this.products = response.data
+        this.products = response.data.map(p => ({
+          ...p,
+          price: Math.round(p.price * 1300)
+        }))
       } catch (err) {
         this.error = 'Failed to fetch products'
       } finally {

@@ -9,8 +9,8 @@ export const useCartStore = defineStore('cart', {
     totalPrice: (state) => state.items.reduce((acc, item) => acc + (item.price * item.quantity), 0),
     cartTotal: (state) => {
       const subtotal = state.items.reduce((acc, item) => acc + (item.price * item.quantity), 0)
-      const tax = subtotal * 0.15 // 15% VAT in Rwanda
-      const shipping = subtotal > 50 ? 0 : 5 // Free shipping over $50
+      const tax = Math.round(subtotal * 0.15) // 15% VAT in Rwanda
+      const shipping = subtotal > 75000 ? 0 : 5000 // Free shipping over 75,000 Rwf
       return {
         subtotal,
         tax,

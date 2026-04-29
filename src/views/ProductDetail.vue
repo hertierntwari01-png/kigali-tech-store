@@ -29,7 +29,10 @@ const quantity = ref(1)
 onMounted(async () => {
   try {
     const response = await axios.get(`https://fakestoreapi.com/products/${route.params.id}`)
-    product.value = response.data
+    product.value = {
+      ...response.data,
+      price: Math.round(response.data.price * 1300)
+    }
   } catch (err) {
     console.error(err)
   } finally {
@@ -50,10 +53,7 @@ const addToCart = () => {
 }
 
 const formatPrice = (price) => {
-  return new Intl.NumberFormat('en-RW', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(price)
+  return new Intl.NumberFormat('en-RW').format(price) + ' Rwf'
 }
 </script>
 

@@ -136,10 +136,7 @@ const handlePayment = async () => {
 }
 
 const formatPrice = (price) => {
-  return new Intl.NumberFormat('en-RW', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(price)
+  return new Intl.NumberFormat('en-RW').format(price) + ' Rwf'
 }
 
 onMounted(() => {

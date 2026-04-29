@@ -14,10 +14,7 @@ import {
 const cartStore = useCartStore()
 
 const formatPrice = (price) => {
-  return new Intl.NumberFormat('en-RW', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(price)
+  return new Intl.NumberFormat('en-RW').format(price) + ' Rwf'
 }
 </script>
 
@@ -115,7 +112,7 @@ const formatPrice = (price) => {
                 <p class="text-3xl font-black text-kigali-blue leading-none">
                   {{ formatPrice(cartStore.cartTotal.total) }}
                 </p>
-                <p class="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-widest">Currency: USD</p>
+                <p class="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-widest">Currency: RWF</p>
               </div>
             </div>
           </div>
