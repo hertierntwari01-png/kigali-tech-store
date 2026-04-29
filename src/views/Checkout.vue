@@ -23,8 +23,9 @@ const isProcessing = ref(false)
 const orderCompleted = ref(false)
 const stripe = ref(null)
 const elements = ref(null)
-const cardElement = ref(null)
+const paymentElement = ref(null)
 const paymentError = ref(null)
+const stripeLoading = ref(false)
 
 const shippingForm = ref({
   fullName: authStore.user?.name || '',
@@ -39,71 +40,91 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
 const handleShippingSubmit = async () => {
   step.value = 2
   await nextTick()
-  // Initialize Stripe after step transition
   await initializeStripe()
 }
 
 const initializeStripe = async () => {
-  stripe.value = await stripePromise
-  if (!stripe.value) {
-    console.error('Failed to load Stripe')
-    return
-  }
-
-  elements.value = stripe.value.elements({
-    appearance: {
-      theme: 'flat',
-      variables: {
-        colorPrimary: '#0066cc',
-        colorBackground: '#ffffff',
-        colorText: '#333333',
-      },
-    },
-  })
-
-  cardElement.value = elements.value.create('card', {
-    style: {
-      base: {
-        fontSize: '16px',
-        color: '#424770',
-        '::placeholder': {
-          color: '#aab7c4',
-        },
-      },
-    },
-  })
-
-  const cardContainer = document.getElementById('card-element')
-  if (cardContainer) {
-    cardElement.value.mount('#card-element')
-  }
-}
-
-const handlePayment = async () => {
-  isProcessing.value = true
+  stripeLoading.value = true
   paymentError.value = null
 
   try {
+    stripe.value = await stripePromise
+    if (!stripe.value) {
+      paymentError.value = 'Failed to load Stripe. Please refresh the page.'
+      stripeLoading.value = false
+      return
+    }
+
     // Create payment intent on backend
-    const response = await axios.post('http://localhost:3001/api/create-payment-intent', {
+    const response = await axios.post('/api/create-payment-intent', {
       amount: cartStore.cartTotal.total,
     })
 
     const { clientSecret } = response.data
 
-    // Confirm payment with Stripe
-    const { error, paymentIntent } = await stripe.value.confirmCardPayment(clientSecret, {
-      payment_method: {
-        card: cardElement.value,
-        billing_details: {
-          name: shippingForm.value.fullName,
-          phone: shippingForm.value.phone,
-          address: {
-            line1: shippingForm.value.address,
-            city: shippingForm.value.city,
+    // Create Elements instance with the client secret
+    elements.value = stripe.value.elements({
+      clientSecret,
+      appearance: {
+        theme: 'flat',
+        variables: {
+          colorPrimary: '#0066cc',
+          colorBackground: '#f9fafb',
+          colorText: '#1f2937',
+          borderRadius: '16px',
+        },
+      },
+    })
+
+    // Create the Payment Element
+    paymentElement.value = elements.value.create('payment', {
+      layout: 'tabs',
+    })
+
+    // Must set loading to false so the #payment-element div is rendered (v-else)
+    stripeLoading.value = false
+    await nextTick()
+
+    const container = document.getElementById('payment-element')
+    if (container) {
+      paymentElement.value.mount('#payment-element')
+    } else {
+      paymentError.value = 'Payment form container not found. Please go back and try again.'
+    }
+  } catch (error) {
+    console.error('Stripe initialization error:', error)
+    paymentError.value = error.response?.data?.error || 'Failed to initialize payment. Please try again.'
+    stripeLoading.value = false
+  }
+}
+
+const handlePayment = async () => {
+  if (!stripe.value || !elements.value) {
+    paymentError.value = 'Payment system not ready. Please go back to shipping and try again.'
+    return
+  }
+
+  isProcessing.value = true
+  paymentError.value = null
+
+  try {
+    const { error, paymentIntent } = await stripe.value.confirmPayment({
+      elements: elements.value,
+      confirmParams: {
+        return_url: window.location.origin + '/checkout',
+        payment_method_data: {
+          billing_details: {
+            name: shippingForm.value.fullName,
+            phone: shippingForm.value.phone,
+            address: {
+              line1: shippingForm.value.address,
+              city: shippingForm.value.city,
+              country: 'RW',
+            },
           },
         },
       },
+      redirect: 'if_required',
     })
 
     if (error) {
@@ -112,7 +133,7 @@ const handlePayment = async () => {
       return
     }
 
-    // Save order to profile
+    // Payment succeeded
     const orders = JSON.parse(localStorage.getItem('orders')) || []
     const newOrder = {
       id: 'ORD-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
@@ -140,9 +161,34 @@ const formatPrice = (price) => {
   return new Intl.NumberFormat('en-RW').format(price) + ' Rwf'
 }
 
-onMounted(() => {
-  if (step.value === 2) {
-    initializeStripe()
+// Handle redirect back after 3DS or other redirect-based payment
+onMounted(async () => {
+  if (stripe.value === null) {
+    stripe.value = await stripePromise
+  }
+  // Check if we're returning from a redirect
+  const urlParams = new URLSearchParams(window.location.search)
+  const paymentIntentId = urlParams.get('payment_intent')
+  const redirectStatus = urlParams.get('redirect_status')
+  
+  if (redirectStatus === 'succeeded' && paymentIntentId) {
+    const orders = JSON.parse(localStorage.getItem('orders')) || []
+    const newOrder = {
+      id: 'ORD-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
+      date: new Date().toISOString(),
+      items: [...cartStore.items],
+      total: cartStore.cartTotal.total,
+      status: 'Processing',
+      paymentId: paymentIntentId,
+      shipping: { ...shippingForm.value }
+    }
+    orders.unshift(newOrder)
+    localStorage.setItem('orders', JSON.stringify(orders))
+    
+    cartStore.clearCart()
+    orderCompleted.value = true
+  } else if (redirectStatus === 'failed') {
+    paymentError.value = 'Payment was not successful. Please try again.'
   }
 })
 </script>
@@ -237,10 +283,14 @@ onMounted(() => {
               <p>Your payment is secure. We use Stripe for encrypted card processing. We also support MoMo Pay.</p>
             </div>
 
-            <!-- Real Stripe Card Input -->
+            <!-- Stripe Payment Element -->
             <div class="space-y-4">
-              <label class="text-xs font-black text-gray-400 uppercase tracking-widest">Credit or Debit Card</label>
-              <div id="card-element" class="p-5 border-2 border-gray-100 dark:border-slate-800 rounded-2xl bg-gray-50 dark:bg-slate-800"></div>
+              <label class="text-xs font-black text-gray-400 uppercase tracking-widest">Payment Method</label>
+              <div v-if="stripeLoading" class="p-8 border-2 border-gray-100 dark:border-slate-800 rounded-2xl bg-gray-50 dark:bg-slate-800 flex items-center justify-center">
+                <span class="h-5 w-5 border-2 border-kigali-blue border-t-transparent rounded-full animate-spin"></span>
+                <span class="ml-3 text-sm text-gray-400">Loading payment form...</span>
+              </div>
+              <div v-else id="payment-element" class="p-5 border-2 border-gray-100 dark:border-slate-800 rounded-2xl bg-gray-50 dark:bg-slate-800"></div>
               <p v-if="paymentError" class="text-xs text-red-500 font-bold">{{ paymentError }}</p>
               <p class="text-[10px] text-gray-400 uppercase font-bold">Test Mode: Use card 4242 4242 4242 4242 with any future date and CVC</p>
             </div>

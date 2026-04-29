@@ -6,14 +6,27 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2024-12-18.acacia',
+});
 
 app.use(cors());
 app.use(express.json());
 
+// Health check
+app.get('/api/health', (req, res) => {
+  res.send({ status: 'ok' });
+});
+
 app.post('/api/create-payment-intent', async (req, res) => {
   try {
     const { amount } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).send({ error: 'Invalid amount' });
+    }
+
+    console.log(`Creating payment intent for amount: ${amount} RWF`);
 
     // Create a PaymentIntent with the order amount and currency
     const paymentIntent = await stripeInstance.paymentIntents.create({
@@ -23,6 +36,8 @@ app.post('/api/create-payment-intent', async (req, res) => {
         enabled: true,
       },
     });
+
+    console.log(`Payment intent created: ${paymentIntent.id}`);
 
     res.send({
       clientSecret: paymentIntent.client_secret,
@@ -35,5 +50,5 @@ app.post('/api/create-payment-intent', async (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Stripe backend running on port ${PORT}`);
 });
